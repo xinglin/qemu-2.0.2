@@ -1,3 +1,6 @@
+This is qemu 2.0.2 with a patch for fixing unmapping of persistent grants.
+See http://lists.xenproject.org/archives/html/xen-devel/2014-11/msg01112.html
+
 Read the documentation in qemu-doc.html or on http://wiki.qemu-project.org
 
 - QEMU team
