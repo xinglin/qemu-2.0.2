@@ -42,7 +42,7 @@
 
 /* ------------------------------------------------------------- */
 
-static int batch_maps   = 0;
+// static int batch_maps   = 0;
 
 static int max_requests = 32;
 
@@ -104,6 +104,7 @@ struct XenBlkDev {
     blkif_back_rings_t  rings;
     int                 more_work;
     int                 cnt_map;
+    bool		batch_maps;
 
     /* request lists */
     QLIST_HEAD(inflight_head, ioreq) inflight;
@@ -305,7 +306,7 @@ static void ioreq_unmap(struct ioreq *ioreq)
     if (ioreq->num_unmap == 0 || ioreq->mapped == 0) {
         return;
     }
-    if (batch_maps) {
+    if (ioreq->blkdev->batch_maps) {
         if (!ioreq->pages) {
             return;
         }
@@ -382,7 +383,7 @@ static int ioreq_map(struct ioreq *ioreq)
         new_maps = ioreq->v.niov;
     }
 
-    if (batch_maps && new_maps) {
+    if (ioreq->blkdev->batch_maps && new_maps) {
         ioreq->pages = xc_gnttab_map_grant_refs
             (gnt, new_maps, domids, refs, ioreq->prot);
         if (ioreq->pages == NULL) {
@@ -429,7 +430,7 @@ static int ioreq_map(struct ioreq *ioreq)
              */
             grant = g_malloc0(sizeof(*grant));
             new_maps--;
-            if (batch_maps) {
+            if (ioreq->blkdev->batch_maps) {
                 grant->page = ioreq->pages + (new_maps) * XC_PAGE_SIZE;
             } else {
                 grant->page = ioreq->page[new_maps];
@@ -701,8 +702,11 @@ static void blk_alloc(struct XenDevice *xendev)
     QLIST_INIT(&blkdev->freelist);
     blkdev->bh = qemu_bh_new(blk_bh, blkdev);
     if (xen_mode != XEN_EMULATE) {
-        batch_maps = 1;
+        blkdev->batch_maps = true;
+    } else {
+	blkdev->batch_maps = false;
     }
+
     if (xc_gnttab_set_max_grants(xendev->gnttabdev,
             MAX_GRANTS(max_requests, BLKIF_MAX_SEGMENTS_PER_REQUEST)) < 0) {
         xen_be_printf(xendev, 0, "xc_gnttab_set_max_grants failed: %s\n",
@@ -881,6 +885,13 @@ static int blk_connect(struct XenDevice *xendev)
     } else {
         blkdev->feature_persistent = !!pers;
     }
+    if (blkdev->feature_persistent) {
+        /*
+         * Disable batch maps, since that would prevent unmapping
+         * single persistent grants.
+         */
+        blkdev->batch_maps = false;
+    }
 
     blkdev->protocol = BLKIF_PROTOCOL_NATIVE;
     if (blkdev->xendev.protocol) {
@@ -958,6 +969,16 @@ static void blk_disconnect(struct XenDevice *xendev)
         blkdev->cnt_map--;
         blkdev->sring = NULL;
     }
+    /*
+     * Unmap persistent grants before switching to the closed state
+     * so the frontend can free them.
+     */
+    if (blkdev->feature_persistent) {
+        g_tree_destroy(blkdev->persistent_gnts);
+        assert(blkdev->persistent_gnt_count == 0);
+        blkdev->feature_persistent = false;
+    }
+
 }
 
 static int blk_free(struct XenDevice *xendev)
@@ -970,9 +991,9 @@ static int blk_free(struct XenDevice *xendev)
     }
 
     /* Free persistent grants */
-    if (blkdev->feature_persistent) {
-        g_tree_destroy(blkdev->persistent_gnts);
-    }
+    // if (blkdev->feature_persistent) {
+    //    g_tree_destroy(blkdev->persistent_gnts);
+    // }
 
     while (!QLIST_EMPTY(&blkdev->freelist)) {
         ioreq = QLIST_FIRST(&blkdev->freelist);
