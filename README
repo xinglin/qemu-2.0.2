@@ -1,6 +1,54 @@
 This is qemu 2.0.2 with a patch for fixing unmapping of persistent grants.
 See http://lists.xenproject.org/archives/html/xen-devel/2014-11/msg01112.html
 
+Without with patch, you might see dom0 kernel crashes with following dmesg.
+[ 9443.130600] blkfront: xvda: flush diskcache: enabled; persistent grants: enabled; indirect descriptors: disabled;
+[ 9443.132818]  xvda: xvda1
+[ 9444.604489] xen:grant_table: WARNING: g.e. 0x30 still in use!
+[ 9444.604496] deferring g.e. 0x30 (pfn 0xffffffffffffffff)
+[ 9444.604499] xen:grant_table: WARNING: g.e. 0x31 still in use!
+[ 9444.604502] deferring g.e. 0x31 (pfn 0xffffffffffffffff)
+[ 9444.604505] xen:grant_table: WARNING: g.e. 0x32 still in use!
+[ 9444.604508] deferring g.e. 0x32 (pfn 0xffffffffffffffff)
+  ==== lots of them====
+[ 9444.604719] xen:grant_table: WARNING: g.e. 0xe still in use!
+[ 9444.604721] deferring g.e. 0xe (pfn 0xffffffffffffffff)
+[ 9444.604723] xen:grant_table: WARNING: g.e. 0xd still in use!
+[ 9444.604725] deferring g.e. 0xd (pfn 0xffffffffffffffff)
+[ 9448.325408] ------------[ cut here ]------------
+[ 9448.325421] WARNING: CPU: 5 PID: 19902 at /build/buildd/linux-3.13.0/arch/x86/xen/multicalls.c:129 xen_mc_flush+0x
+1a9/0x1b0()
+[ 9448.325492] CPU: 5 PID: 19902 Comm: sudo Tainted: GF          O 3.13.0-33-generic #58-Ubuntu
+[ 9448.325494] Hardware name: Dell Inc. PowerEdge R710/00W9X3, BIOS 2.1.15 09/02/2010
+[ 9448.325497]  0000000000000009 ffff8802d13d9aa8 ffffffff8171bd04 0000000000000000
+[ 9448.325501]  ffff8802d13d9ae0 ffffffff810676cd 0000000000000000 0000000000000001
+[ 9448.325505]  ffff88030418ffe0 ffff88031d6ab180 0000000000000010 ffff8802d13d9af0
+[ 9448.325509] Call Trace:
+[ 9448.325518]  [<ffffffff8171bd04>] dump_stack+0x45/0x56
+[ 9448.325523]  [<ffffffff810676cd>] warn_slowpath_common+0x7d/0xa0
+[ 9448.325526]  [<ffffffff810677aa>] warn_slowpath_null+0x1a/0x20
+[ 9448.325530]  [<ffffffff81004e99>] xen_mc_flush+0x1a9/0x1b0
+[ 9448.325534]  [<ffffffff81006b99>] xen_set_pud_hyper+0x109/0x110
+[ 9448.325538]  [<ffffffff81006c3b>] xen_set_pud+0x9b/0xb0
+[ 9448.325543]  [<ffffffff81177f06>] __pmd_alloc+0xd6/0x110
+[ 9448.325548]  [<ffffffff81182218>] move_page_tables+0x678/0x720
+[ 9448.325552]  [<ffffffff8117ddb7>] ? vma_adjust+0x337/0x7d0
+[ 9448.325557]  [<ffffffff811c23fd>] shift_arg_pages+0xbd/0x1b0
+[ 9448.325560]  [<ffffffff81181671>] ? mprotect_fixup+0x151/0x290
+[ 9448.325564]  [<ffffffff811c26cb>] setup_arg_pages+0x1db/0x200
+[ 9448.325570]  [<ffffffff81213edc>] load_elf_binary+0x41c/0xd80
+[ 9448.325576]  [<ffffffff8131d503>] ? ima_get_action+0x23/0x30
+[ 9448.325579]  [<ffffffff8131c7e2>] ? process_measurement+0x82/0x2c0
+[ 9448.325584]  [<ffffffff811c2f7f>] search_binary_handler+0x8f/0x1b0
+[ 9448.325587]  [<ffffffff811c44f7>] do_execve_common.isra.22+0x5a7/0x7e0
+[ 9448.325591]  [<ffffffff811c49c6>] SyS_execve+0x36/0x50
+[ 9448.325596]  [<ffffffff8172cc99>] stub_execve+0x69/0xa0
+[ 9448.325599] ---[ end trace 53ac16782e751c0a ]---
+[ 9448.347994] ------------[ cut here ]------------
+[ 9448.348004] WARNING: CPU: 1 PID: 19902 at /build/buildd/linux-3.13.0/mm/mmap.c:2736 exit_mmap+0x16b/0x170()
+
+
+
 Read the documentation in qemu-doc.html or on http://wiki.qemu-project.org
 
 - QEMU team
